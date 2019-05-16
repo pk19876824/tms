@@ -68,5 +68,156 @@
 * * *
 
 ## 2 设计方案
+### 2.1 业务结构
+
+![93a33302adcab43b4b4f9037f3f02581.png](evernotecid://CE5C7BCE-9844-450F-A5FE-FD0CDC7452D3/appyinxiangcom/24639860/ENResource/p5)@w=400h=120
+
+  该机票管理系统由 `飞机、航线、机票` 3个模块组成。
+
+#### 2.1.1 飞机
+
+  `飞机` 是机票管理系统的基础组件。有了飞机才能够安排航线，产生机票。
+  
+  飞机这个实体应该包括飞机的共有特性，如 `飞机机型`（如波音737-800）、`大小类型`（大型、中型、小型）、`舱位配置`（经济舱、商务舱）、`其他配置`（电视、无线网络、餐饮等）。
+  
+  可以对飞机进行 `增加`（服役）、`修改`（更换配置）、`删除`（退役）、`查找` 操作。
+  
+#### 2.1.2 航线
+
+  `航线` 是机票管理系统的业务核心组件，表示一次航班的具体航行信息。可对空闲的飞机安排航线，并由航线和飞机产生特定机票。
+  
+  航线应包括一次航行的共有信息，如 `飞机ID`、`始发地`、`目的地`、`起飞时间`、`降落时间`、`航行状态`（未出发、正在飞行、已结束）、`票价`等。
+  
+  设置完航线后，系统根据该航线和飞机的舱位配置自动产生符合数量的机票。
+  
+  购票者可根据起飞时间、始发地和目的地来搜索航线，以购买机票。
+  
+  可以对航线进行`增加`、`修改`、`删除`、`查找` 操作。
+  
+#### 2.1.3 机票
+
+  `机票` 是机票管理系统的业务顶层模块，处于正在售票状态的机票可被购买。
+  
+  机票的共有属性有 `飞机ID`、`航线ID`、`购买者ID`、`机票状态`、`座位席别`、`票价`等。
+  
+  可以对机票进行`增加`、`修改`、`删除`、`查找` 操作。
+  
+  
+### 2.2 数据库设计
+#### 2.2.1 aircraft
+
+| 字段名 | 字段类型 | 是否可为NULL | 默认值 | 是否主键 | 备注 |
+|:---:|:---:|:---:|:---:|:---:|:---:|
+| id | varchar(50) | 否 | 无 | 是 | 主键 |
+| model | varchar(50) | 否 | 无 | 否 | 机型 |
+| type | varchar(20) | 否 | 无 | 否 | 类型 |
+| config | text | 是 | 无 | 否 | 飞机配置，json字符串 |
+| create_time | timestamp | 否 | CURRENT_TIMESTAMP | 否 | 创建时间 |
+| update_time | timestamp | 否 | CURRENT_TIMESTAMP | 否 | 修改时间 |
+
+
+  建表SQL
+  
+```SQL
+CREATE TABLE `aircraft` (
+  `id` varchar(50) NOT NULL,
+  `model` varchar(50) NOT NULL COMMENT '机型',
+  `type` varchar(20) NOT NULL COMMENT '类型',
+  `config` text,
+  `create_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `update_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci 
+```
+
+  `id` 为varchar类型是为了记录飞机的机名，如南方航空CZ6171。本系统默认飞机机名无重复。
+  
+  `config` 为json字符串，该设计是为了使飞机的配置更灵活。
+  
+  `create_time` 用来记录该条记录被创建的时间。
+  
+  `update_time` 用来记录该条记录最后一次被修改的时间。
+  
+#### 2.2.2 airline
+
+| 字段名 | 字段类型 | 是否可为NULL | 默认值 | 是否主键 | 备注 |
+|:---:|:---:|:---:|:---:|:---:|:---:|
+| id | bigint(20) | 否 | 无 | 是 | auto_increment |
+| aircraft_id | varchar(50) | 是 | 无 | 否 | 飞机Id |
+| start_location | varchar(20) | 是 | 无 | 否 | 始发地 |
+| end_location | varchar(20) | 是 | 无 | 否 | 目的地 |
+| start_time | timestamp | 是 | 无 | 否 | 起飞时间 |
+| end_time | timestamp | 是 | 无 | 否 | 降落时间 |
+| status | int | 否 | 0 | 否 | 当次航程状态。0:未开始;1:途中;2:已结束 |
+| ticket_status | int | 否 | 0 | 否 | 是否已开启售票.0:未开启;1:已开启 |
+| economy_price | int | 否 | 0 | 否 | 经济舱价格 |
+| business_price | int | 否 | 0 | 否 | 商务舱价格 |
+| delete_flag | int | 否 | 0 | 否 | 删标志.0:未删除;1:已删除 |
+| create_time | timestamp | 否 | CURRENT_TIMESTAMP | 否 | 创建时间 |
+
+建表SQL
+
+```SQL
+CREATE TABLE `airline` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT,
+  `aircraft_id` varchar(50) DEFAULT NULL,
+  `start_location` varchar(20) DEFAULT NULL COMMENT '出发点',
+  `end_location` varchar(20) DEFAULT NULL COMMENT '目的地',
+  `start_time` timestamp NULL DEFAULT NULL COMMENT '起飞时间',
+  `end_time` timestamp NULL DEFAULT NULL COMMENT '到达时间',
+  `status` int(11) NOT NULL DEFAULT '0' COMMENT '当次航程状态。0:未开始;1:途中;2:已结束',
+  `ticket_status` int(11) NOT NULL DEFAULT '0' COMMENT '是否已开启售票.0:未开启;1:已开启',
+  `economy_price` int(11) NOT NULL DEFAULT '0' COMMENT '经济舱价格',
+  `business_price` int(11) NOT NULL DEFAULT '0' COMMENT '商务舱价格',
+  `delete_flag` tinyint(4) NOT NULL DEFAULT '0',
+  `create_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `airline_aircraft_id_index` (`aircraft_id`),
+  KEY `airline_start_location_end_location_start_time_index` (`start_location`,`end_location`,`start_time`)
+) ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+```
+
+  `airline_aircraft_id_index` 对aircraft_id建立索引，是为了加快由飞机来查找航线时的查询速度。
+  
+  `airline_start_location_end_location_start_time_index` 对start_location、end_location、start_time建立组合索引，是为了加快根据搜索条件搜索航线时的速度。
+  
+  `aircraft_id` 是aircraft表的id，不给该字段设定外键是为了降低表之间的耦合性，外键特性由业务逻辑来保证。
+  
+#### 2.2.3 ticket
+
+| 字段名 | 字段类型 | 是否可为NULL | 默认值 | 是否主键 | 备注 |
+|:---:|:---:|:---:|:---:|:---:|:---:|
+| id | bigint(20) | 否 | 无 | 是 | auto_increment |
+| aircraft_id | varchar(50) | 是 | 无 | 否 | 飞机Id |
+| airline_id | bigint(20) | 是 | 无 | 否 | 航线Id |
+| owner_id | bigint(20) | 否 | 0 | 否 | 购买者Id |
+| status | tinyint | 否 | 0 | 否 | 票的状态。0:未售出;1:已售出;2:已过期 |
+| seat_type | tinyint | 否 | 0 | 否 | 座位类别.0:经济仓;1:商务舱 |
+| price | int | 否 | 0 | 否 | 价格 |
+| delete_flag | tinyint | 否 | 0 | 否 | 删标志.0:未删除;1:已删除 |
+| create_time | timestamp | 否 | CURRENT_TIMESTAMP | 否 | 创建时间 |
+| create_time | timestamp | 否 | CURRENT_TIMESTAMP | 否 | 修改时间 |
+
+建表SQL
+
+```SQL
+CREATE TABLE `ticket` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT,
+  `aircraft_id` varchar(50) DEFAULT NULL,
+  `airline_id` bigint(20) DEFAULT NULL,
+  `owner_id` bigint(20) NOT NULL DEFAULT '0' COMMENT '购买者id',
+  `status` tinyint(4) NOT NULL DEFAULT '0' COMMENT '票的状态。0:未售出;1:已售出;2:已过期',
+  `seat_type` tinyint(4) NOT NULL DEFAULT '0' COMMENT '座位类别.0:经济仓;1:商务舱',
+  `price` int(11) NOT NULL DEFAULT '0' COMMENT '价格',
+  `delete_flag` tinyint(4) NOT NULL DEFAULT '0',
+  `create_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `update_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `ticket_airline_id_index` (`airline_id`)
+) ENGINE=InnoDB AUTO_INCREMENT=1451 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+```
+ `ticket_airline_id_index` 对airline_id建立索引是为了根据航线快速搜索票务信息。
+ 
+ `delete_flag` 使用字段来记录删除状态以达到软删除的目的。
 
   
